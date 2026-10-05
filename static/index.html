@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR Assist</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --panel: #ffffff; --border: #e2e6ee; --text: #1d2433; --muted: #6b7489;
+    --accent: #2f6fed; --accent-soft: #e8effd; --user: #2f6fed; --bot: #ffffff; --code: #f1f3f7;
+    --ok: #1f9d55; --warn: #c27c0e; --err: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11151c; --panel: #1a2029; --border: #2a3240; --text: #e6e9ef; --muted: #8d97ab;
+      --accent: #5b8ff9; --accent-soft: #1f2b44; --user: #3b6fe0; --bot: #1a2029; --code: #232a35; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); padding: 6px 12px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .6; cursor: default; }
+  input, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 11px; width: 100%; }
+  .hidden { display: none !important; }
+
+  /* login */
+  #login { display: grid; place-items: center; height: 100%; padding: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 28px;
+    width: 100%; max-width: 360px; display: grid; gap: 12px; }
+  .card h1 { margin: 0; font-size: 20px; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .error { color: var(--err); font-size: 13px; min-height: 18px; }
+
+  /* app */
+  #app { display: grid; grid-template-columns: 290px 1fr; height: 100%; }
+  aside { background: var(--panel); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 18px; }
+  aside h3 { margin: 0 0 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .profile .name { font-weight: 600; font-size: 15px; }
+  .chip { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 99px;
+    padding: 1px 8px; font-size: 11.5px; margin-top: 4px; }
+  .suggestion { display: block; width: 100%; text-align: left; margin-bottom: 6px; font-size: 13px; }
+  .doc { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 4px 0;
+    border-bottom: 1px dashed var(--border); word-break: break-all; }
+  #upload-status { font-size: 12.5px; white-space: pre-wrap; }
+
+  main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px;
+    border-bottom: 1px solid var(--border); background: var(--panel); gap: 8px; }
+  header .title { font-weight: 600; }
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 760px; padding: 10px 14px; border-radius: 12px; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--user); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--bot); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.bot.err { border-color: var(--err); }
+  .msg p { margin: 0 0 6px; } .msg p:last-child { margin-bottom: 0; }
+  .msg ul, .msg ol { margin: 4px 0 6px; padding-left: 20px; }
+  .msg code { background: var(--code); padding: 1px 4px; border-radius: 4px; }
+  details.steps { margin-top: 8px; font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 6px; }
+  details.steps summary { cursor: pointer; color: var(--muted); }
+  .step { margin-top: 6px; background: var(--code); border-radius: 8px; padding: 6px 8px; }
+  .step .tool { font-weight: 600; color: var(--accent); }
+  .step pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto;
+    font-size: 11.5px; }
+  .sources { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .typing { color: var(--muted); font-style: italic; }
+  form#composer { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--panel); }
+  form#composer textarea { resize: none; height: 44px; }
+
+  @media (max-width: 760px) {
+    #app { grid-template-columns: 1fr; }
+    aside { display: none; }
+    #messages, form#composer, header { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<section id="login">
+  <form class="card" id="login-form">
+    <h1>HR Assist</h1>
+    <div class="muted">Sign in with your employee account.</div>
+    <input id="username" placeholder="Username" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <div class="error" id="login-error"></div>
+    <button class="primary" type="submit">Sign in</button>
+    <div class="muted">Demo users: asha, rahul (on probation), arjun (intern), meera (HR admin) - password <code>demo123</code></div>
+  </form>
+</section>
+
+<section id="app" class="hidden">
+  <aside>
+    <div class="profile">
+      <h3>Signed in as</h3>
+      <div class="name" id="p-name"></div>
+      <div class="muted" id="p-meta"></div>
+      <span class="chip" id="p-role"></span>
+    </div>
+    <div>
+      <h3>Try asking</h3>
+      <div id="suggestions"></div>
+    </div>
+    <div id="docs-panel">
+      <h3>Policy documents (Qdrant)</h3>
+      <div id="doc-list" class="muted">Loading...</div>
+      <div id="upload-box" class="hidden" style="margin-top:10px; display:grid; gap:6px;">
+        <input type="file" id="file" accept=".md,.txt,.pdf,.docx">
+        <div style="display:flex; gap:6px;">
+          <button id="preview-btn" type="button">Preview chunks</button>
+          <button id="upload-btn" class="primary" type="button">Upload &amp; index</button>
+        </div>
+        <div id="upload-status" class="muted"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <span class="title">HR Assist</span>
+      <span>
+        <button id="reset-btn" type="button">New chat</button>
+        <button id="logout-btn" type="button">Sign out</button>
+      </span>
+    </header>
+    <div id="messages"></div>
+    <form id="composer">
+      <textarea id="input" placeholder="Ask about leave, holidays, policies..." required></textarea>
+      <button class="primary" id="send-btn" type="submit">Send</button>
+    </form>
+  </main>
+</section>
+
+<script>
+const SUGGESTIONS = [
+  "What is my leave balance?",
+  "Can I take earned leave from next Monday to Friday?",
+  "How many working days between 2026-10-19 and 2026-10-23?",
+  "How many earned leaves will lapse at year end?",
+  "What is the sick leave policy for more than 2 days?",
+  "What are the upcoming holidays?",
+  "What's the work from home policy?",
+];
+const $ = (id) => document.getElementById(id);
+let token = null;
+try { token = sessionStorage.getItem("hr_token"); } catch (e) {}
+
+async function api(path, options = {}) {
+  const headers = options.body instanceof FormData ? {} : { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "/api/login") { signOut(true); }
+  if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
+  return data;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Tiny, safe markdown renderer: escape first, then format bold, code, bullet/numbered lists, paragraphs.
+function renderMarkdown(text) {
+  const lines = escapeHtml(text || "").split("\n");
+  let html = "", list = null;
+  const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>")
+                         .replace(/^#{1,6}\s+(.*)$/, "<strong>$1</strong>");
+  for (const line of lines) {
+    const bullet = line.match(/^\s*[-*•]\s+(.*)$/), num = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    const type = bullet ? "ul" : num ? "ol" : null;
+    if (list && type !== list) { html += `</${list}>`; list = null; }
+    if (type) { if (!list) { html += `<${type}>`; list = type; } html += `<li>${inline((bullet || num)[1])}</li>`; }
+    else if (line.trim()) html += `<p>${inline(line)}</p>`;
+  }
+  if (list) html += `</${list}>`;
+  return html;
+}
+
+function addMessage(role, text, steps = [], isError = false) {
+  const el = document.createElement("div");
+  el.className = `msg ${role}` + (isError ? " err" : "");
+  el.innerHTML = role === "user" ? escapeHtml(text).replace(/\n/g, "<br>") : renderMarkdown(text);
+  if (steps.length) {
+    const sources = new Set();
+    steps.filter((s) => s.tool === "search_hr_policy").forEach((s) =>
+      (s.result.results || []).forEach((r) => sources.add(r.document)));
+    if (sources.size) {
+      const src = document.createElement("div");
+      src.className = "sources";
+      src.textContent = "Sources: " + [...sources].join(", ");
+      el.appendChild(src);
+    }
+    const details = document.createElement("details");
+    details.className = "steps";
+    const toolCount = steps.filter((s) => s.type === "tool").length;
+    details.innerHTML = `<summary>Agent steps (${toolCount} tool call${toolCount === 1 ? "" : "s"})</summary>` +
+      steps.map((s, i) => s.type !== "tool"
+        ? `<div class="step"><em>${s.type === "guardrail" ? "Guardrail: " : ""}${escapeHtml(s.content)}</em></div>`
+        : `<div class="step"><span class="tool">${i + 1}. ${escapeHtml(s.tool)}</span> <span class="muted">${s.ms} ms</span>
+             <pre>args: ${escapeHtml(JSON.stringify(s.arguments))}\nresult: ${escapeHtml(JSON.stringify(s.result, null, 2))}</pre></div>`
+      ).join("");
+    el.appendChild(details);
+  }
+  $("messages").appendChild(el);
+  $("messages").scrollTop = $("messages").scrollHeight;
+  return el;
+}
+
+async function loadDocuments() {
+  try {
+    const { documents } = await api("/api/documents");
+    $("doc-list").innerHTML = documents.length
+      ? documents.map((d) => `<div class="doc"><span>${escapeHtml(d.document)}</span><span class="muted">${d.chunks} chunks</span></div>`).join("")
+      : "No documents indexed yet.";
+  } catch (e) { $("doc-list").textContent = e.message; }
+}
+
+function showApp(employee) {
+  $("login").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("p-name").textContent = employee.full_name;
+  $("p-meta").textContent = `${employee.id} · ${employee.designation} · ${employee.department}`;
+  $("p-role").textContent = employee.role === "hr_admin" ? "HR admin" : employee.employment_type.replace("_", " ");
+  $("upload-box").classList.toggle("hidden", employee.role !== "hr_admin");
+  $("suggestions").innerHTML = "";
+  SUGGESTIONS.forEach((q) => {
+    const b = document.createElement("button");
+    b.className = "suggestion"; b.type = "button"; b.textContent = q;
+    b.onclick = () => { $("input").value = q; $("composer").requestSubmit(); };
+    $("suggestions").appendChild(b);
+  });
+  $("messages").innerHTML = "";
+  addMessage("bot", `Hi ${employee.full_name.split(" ")[0]}! I can answer HR policy questions, check your leave balance, ` +
+    `work out leave days and eligibility, and help you apply for leave.`);
+  loadDocuments();
+  $("input").focus();
+}
+
+function signOut(expired = false) {
+  token = null;
+  try { sessionStorage.removeItem("hr_token"); } catch (e) {}
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("login-error").textContent = expired ? "Session expired, please sign in again." : "";
+}
+
+$("login-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("login-error").textContent = "";
+  try {
+    const data = await api("/api/login", { method: "POST",
+      body: JSON.stringify({ username: $("username").value, password: $("password").value }) });
+    token = data.token;
+    try { sessionStorage.setItem("hr_token", token); } catch (e) {}
+    $("password").value = "";
+    showApp(data.employee);
+  } catch (err) { $("login-error").textContent = err.message; }
+};
+
+// Live bubble while the agent works: status line with a timer, completed tool calls, streamed answer tokens.
+function startLiveMessage() {
+  const el = document.createElement("div");
+  el.className = "msg bot";
+  el.innerHTML = `<div class="live-status typing"></div><div class="live-steps"></div><div class="live-text"></div>`;
+  $("messages").appendChild(el);
+  const started = Date.now();
+  let status = "Thinking...", text = "";
+  const paint = () => {
+    el.querySelector(".live-status").textContent = text ? "" : `${status} (${Math.round((Date.now() - started) / 1000)}s)`;
+  };
+  const timer = setInterval(paint, 1000);
+  paint();
+  return {
+    status(s) { status = s; paint(); },
+    step(s) {
+      if (s.type !== "tool") return;
+      const line = document.createElement("div");
+      line.className = "muted";
+      line.textContent = `✓ ${s.tool} (${s.ms} ms)`;
+      el.querySelector(".live-steps").appendChild(line);
+    },
+    token(t) {
+      text += t;
+      el.querySelector(".live-text").innerHTML = renderMarkdown(text);
+      paint();
+      $("messages").scrollTop = $("messages").scrollHeight;
+    },
+    finish() { clearInterval(timer); el.remove(); return Math.round((Date.now() - started) / 1000); },
+  };
+}
+
+async function streamChat(message, live) {
+  const res = await fetch("/api/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ message }),
+  });
+  if (res.status === 401) { signOut(true); throw new Error("Session expired"); }
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Request failed (${res.status})`);
+  const reader = res.body.getReader(), decoder = new TextDecoder();
+  let buffer = "", final = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines.filter(Boolean)) {
+      const ev = JSON.parse(line);
+      if (ev.type === "status") live.status(ev.content);
+      else if (ev.type === "step") live.step(ev.step);
+      else if (ev.type === "token") live.token(ev.content);
+      else if (ev.type === "done" || ev.type === "error") final = ev;
+    }
+  }
+  if (!final) throw new Error("The response ended unexpectedly.");
+  return final;
+}
+
+$("composer").onsubmit = async (e) => {
+  e.preventDefault();
+  const message = $("input").value.trim();
+  if (!message) return;
+  $("input").value = "";
+  $("send-btn").disabled = true;
+  addMessage("user", message);
+  const live = startLiveMessage();
+  try {
+    const result = await streamChat(message, live);
+    const seconds = live.finish();
+    const el = addMessage("bot", result.answer, result.steps || [], result.type === "error");
+    const meta = document.createElement("div");
+    meta.className = "sources";
+    meta.textContent = `Answered in ${seconds}s`;
+    el.appendChild(meta);
+  } catch (err) {
+    live.finish();
+    addMessage("bot", err.message, [], true);
+  } finally {
+    $("send-btn").disabled = false;
+    $("input").focus();
+  }
+};
+
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
+});
+
+$("reset-btn").onclick = async () => {
+  await api("/api/chat/reset", { method: "POST" }).catch(() => {});
+  $("messages").innerHTML = "";
+  addMessage("bot", "Started a new conversation. How can I help?");
+};
+
+$("logout-btn").onclick = async () => {
+  await api("/api/logout", { method: "POST" }).catch(() => {});
+  signOut();
+};
+
+async function sendFile(path) {
+  const file = $("file").files[0];
+  if (!file) { $("upload-status").textContent = "Choose a file first."; return null; }
+  const form = new FormData();
+  form.append("file", file);
+  $("upload-btn").disabled = $("preview-btn").disabled = true;
+  $("upload-status").textContent = "Chunking and embedding...";
+  try { return await api(path, { method: "POST", body: form }); }
+  catch (err) { $("upload-status").textContent = "Error: " + err.message; return null; }
+  finally { $("upload-btn").disabled = $("preview-btn").disabled = false; }
+}
+
+$("upload-btn").onclick = async () => {
+  const stats = await sendFile("/api/documents");
+  if (!stats) return;
+  $("upload-status").textContent =
+    `Indexed ${stats.document}: ${stats.chunks} chunks (avg ${stats.avg_chunk_chars} chars), ` +
+    `${stats.vector_size}-dim vectors via ${stats.embed_model}.`;
+  $("file").value = "";
+  loadDocuments();
+};
+
+$("preview-btn").onclick = async () => {
+  const data = await sendFile("/api/documents/preview?limit=50");
+  if (!data) return;
+  $("upload-status").textContent = `${data.total_chunks} semantic chunks - shown in the chat panel.`;
+  addMessage("bot", `**Chunk preview for ${data.document}** (${data.total_chunks} chunks)\n` +
+    data.chunks.map((c, i) => `${i + 1}. [${c.text.length} chars, ${c.sentences} sentences] ${c.text.split("\n").slice(1).join(" ").slice(0, 160)}...`).join("\n"));
+};
+
+(async () => {
+  if (!token) return;
+  try { showApp(await api("/api/me")); } catch (e) { signOut(); }
+})();
+</script>
+</body>
+</html>
